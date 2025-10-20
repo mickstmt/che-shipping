@@ -2,6 +2,8 @@ from app import db
 from datetime import datetime, time
 import json
 
+# AGREGAR ESTOS MODELOS AL FINAL DE app/models.py
+
 class ShippingZone(db.Model):
     """Modelo para zonas de envío por kilometraje"""
     __tablename__ = 'shipping_zones'
