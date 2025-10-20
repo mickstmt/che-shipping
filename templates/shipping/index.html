@@ -1,0 +1,661 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Envíos - Shipping Service Chile{% endblock %}
+
+{% block extra_css %}
+<style>
+    .shipping-card {
+        border-radius: 10px;
+        border: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+    
+    .shipping-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    }
+    
+    .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    
+    .status-active {
+        background-color: #28a745;
+        animation: pulse 2s infinite;
+    }
+    
+    .status-inactive {
+        background-color: #dc3545;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+    
+    .tariff-table th {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .chile-flag {
+        background: linear-gradient(to right, #0033a0 0%, #ffffff 50%, #da020e 100%);
+        height: 4px;
+        width: 100%;
+        border-radius: 2px;
+    }
+    
+    .api-endpoint {
+        background: #f8f9fa;
+        border-left: 4px solid #007bff;
+        padding: 10px;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 0.9rem;
+    }
+    
+    .router-service-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 15px;
+        font-size: 0.75rem;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1>
+                    <i class="bi bi-truck"></i> Gestión de Envíos Chile
+                </h1>
+                <div class="chile-flag mb-2"></div>
+                <p class="text-muted mb-0">
+                    Sistema de envío integrado con RouterService
+                    <span class="router-service-badge ms-2">RouterService API</span>
+                </p>
+            </div>
+            
+            <!-- Estado del servicio -->
+            <div id="service-status">
+                <span class="badge bg-success" id="status-badge">
+                    <i class="bi bi-check-circle"></i> Servicio Activo
+                </span>
+            </div>
+        </div>
+        
+        <!-- Cards de resumen -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card shipping-card text-center p-4 bg-primary text-white">
+                    <div class="h2">
+                        <i class="bi bi-clock"></i>
+                    </div>
+                    <div id="available-methods" class="h3">-</div>
+                    <div>Métodos Disponibles</div>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="card shipping-card text-center p-4 bg-success text-white">
+                    <div class="h2">
+                        <i class="bi bi-geo-alt"></i>
+                    </div>
+                    <div id="coverage-area" class="h3">7 km</div>
+                    <div>Área de Cobertura</div>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="card shipping-card text-center p-4 bg-info text-white">
+                    <div class="h2">
+                        <i class="bi bi-currency-dollar"></i>
+                    </div>
+                    <div id="min-price" class="h3">$3.500</div>
+                    <div>Tarifa Mínima</div>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="card shipping-card text-center p-4 bg-warning text-dark">
+                    <div class="h2">
+                        <i class="bi bi-receipt"></i>
+                    </div>
+                    <div id="today-quotes" class="h3">-</div>
+                    <div>Cotizaciones Hoy</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Información de API para Jumpseller -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shipping-card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-link-45deg"></i> Integración con Jumpseller
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Endpoint Principal</h6>
+                                <div class="api-endpoint mb-3">
+                                    POST https://envio.chetomi.cl/shipping/api/quote
+                                </div>
+                                
+                                <h6>Ejemplo de Request</h6>
+                                <pre class="bg-light p-3 rounded"><code>{
+  "destination": "Providencia, Santiago, Chile",
+  "origin": "Santiago Centro, Chile",
+  "session_id": "optional_id"
+}</code></pre>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <h6>Ejemplo de Response</h6>
+                                <pre class="bg-light p-3 rounded"><code>{
+  "success": true,
+  "route": {
+    "distance_km": 3.2,
+    "duration_minutes": 18
+  },
+  "shipping_options": [
+    {
+      "method_code": "envio_hoy",
+      "method_name": "Envío Hoy",
+      "price_clp": 3500,
+      "available_until": "18:00"
+    }
+  ]
+}</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Métodos de envío actuales -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card shipping-card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-stopwatch"></i> Métodos de Envío
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="methods-list">
+                            <div class="text-center p-3">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-2">Cargando métodos...</p>
+                            </div>
+                        </div>
+                        
+                        {% if current_user.is_admin() %}
+                        <hr>
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('shipping.manage_methods') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-gear"></i> Configurar Métodos
+                            </a>
+                            <button class="btn btn-outline-success" onclick="initDefaultData()">
+                                <i class="bi bi-download"></i> Datos por Defecto
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card shipping-card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-calculator"></i> Tarifas por Distancia
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm tariff-table" id="zones-table">
+                                <thead>
+                                    <tr>
+                                        <th>Distancia (km)</th>
+                                        <th>Tarifa (CLP)</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="3" class="text-center">
+                                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                                            Cargando tarifas...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {% if current_user.is_admin() %}
+                        <hr>
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('shipping.manage_zones') }}" class="btn btn-outline-success">
+                                <i class="bi bi-tags"></i> Configurar Tarifas
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Probador de API -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card shipping-card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-bug"></i> Probador de API
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Dirección de Origen</label>
+                                    <input type="text" class="form-control" id="test-origin" 
+                                           value="Santiago Centro, Chile" placeholder="Dirección de origen">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Dirección de Destino</label>
+                                    <input type="text" class="form-control" id="test-destination" 
+                                           placeholder="Ej: Providencia, Santiago, Chile">
+                                    <small class="text-muted">Prueba con: Las Condes, Ñuñoa, La Reina, etc.</small>
+                                </div>
+                                
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-info" onclick="testShippingAPI()">
+                                        <i class="bi bi-play"></i> Probar Cotización
+                                    </button>
+                                    <button class="btn btn-outline-info" onclick="testGeocoding()">
+                                        <i class="bi bi-geo"></i> Probar Geocodificación
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <h6>Resultado de la Prueba</h6>
+                                <div id="test-result" class="bg-light p-3 rounded" style="min-height: 200px;">
+                                    <p class="text-muted">Ingresa una dirección y haz clic en "Probar" para ver el resultado</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Cargar datos al inicializar
+$(document).ready(function() {
+    loadMethods();
+    loadZones();
+    loadStats();
+});
+
+function loadMethods() {
+    $.ajax({
+        url: '/shipping/api/test-address',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            address: address
+        }),
+        success: function(response) {
+            showTestResult(response, true);
+        },
+        error: function(xhr) {
+            let errorResponse = {
+                success: false,
+                error: 'Error en geocodificación'
+            };
+            
+            if (xhr.responseJSON) {
+                errorResponse = xhr.responseJSON;
+            }
+            
+            showTestResult(errorResponse, false);
+        }
+    });
+}
+
+function showTestResult(result, isSuccess) {
+    let html = '';
+    
+    if (isSuccess && result.success) {
+        if (result.shipping_options) {
+            // Resultado de cotización completa
+            html += '<div class="alert alert-success">';
+            html += '<h6><i class="bi bi-check-circle"></i> Cotización Exitosa</h6>';
+            html += `<p><strong>Origen:</strong> ${result.origin.formatted_address || result.origin.address}</p>`;
+            html += `<p><strong>Destino:</strong> ${result.destination.formatted_address || result.destination.address}</p>`;
+            html += `<p><strong>Distancia:</strong> ${result.route.distance_km} km</p>`;
+            html += `<p><strong>Tiempo:</strong> ${result.route.duration_minutes} minutos</p>`;
+            html += '</div>';
+            
+            html += '<h6>Opciones de Envío:</h6>';
+            result.shipping_options.forEach(function(option) {
+                html += '<div class="card mb-2">';
+                html += '<div class="card-body py-2">';
+                html += `<div class="d-flex justify-content-between align-items-center">`;
+                html += `<div>`;
+                html += `<strong>${option.method_name}</strong>`;
+                html += `<small class="text-muted d-block">${option.description}</small>`;
+                html += `<small class="text-muted">Disponible hasta: ${option.available_until}</small>`;
+                html += `</div>`;
+                html += `<div class="text-end">`;
+                html += `<h5 class="text-success mb-0">${option.price_formatted}</h5>`;
+                html += `<small class="text-muted">${option.zone_range}</small>`;
+                html += `</div>`;
+                html += `</div>`;
+                html += '</div>';
+                html += '</div>';
+            });
+        } else if (result.geocoded) {
+            // Resultado de geocodificación
+            html += '<div class="alert alert-success">';
+            html += '<h6><i class="bi bi-geo-alt"></i> Geocodificación Exitosa</h6>';
+            html += `<p><strong>Dirección:</strong> ${result.address}</p>`;
+            html += `<p><strong>Geocodificada:</strong> ${result.geocoded.formatted_address}</p>`;
+            html += `<p><strong>Coordenadas:</strong> ${result.geocoded.lat}, ${result.geocoded.lng}</p>`;
+            html += '</div>';
+        }
+    } else {
+        // Error
+        html += '<div class="alert alert-danger">';
+        html += '<h6><i class="bi bi-exclamation-triangle"></i> Error</h6>';
+        html += `<p>${result.error || 'Error desconocido'}</p>`;
+        
+        if (result.distance_km) {
+            html += `<p><strong>Distancia calculada:</strong> ${result.distance_km} km</p>`;
+        }
+        
+        if (result.max_distance) {
+            html += `<p><strong>Distancia máxima:</strong> ${result.max_distance} km</p>`;
+        }
+        
+        if (result.available_zones) {
+            html += `<p><strong>Zonas disponibles:</strong> ${result.available_zones.join(', ')}</p>`;
+        }
+        
+        html += '</div>';
+    }
+    
+    $('#test-result').html(html);
+}
+
+function initDefaultData() {
+    if (!confirm('¿Estás seguro de que quieres inicializar los datos por defecto? Esto solo funciona si no hay datos existentes.')) {
+        return;
+    }
+    
+    $.ajax({
+        url: '/shipping/admin/api/init-default-data',
+        method: 'POST',
+        success: function(response) {
+            if (response.success) {
+                showNotification('success', response.message);
+                // Recargar datos
+                loadMethods();
+                loadZones();
+            } else {
+                showNotification('error', response.error);
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Error al inicializar datos';
+            showNotification('error', error);
+        }
+    });
+}
+
+function showNotification(type, message) {
+    const bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+    const icon = type === 'success' ? 'check-circle' : 'x-circle';
+    
+    const notification = $('<div class="toast-notification"></div>')
+        .addClass(bgClass)
+        .html('<i class="bi bi-' + icon + '"></i> ' + message)
+        .css({
+            position: 'fixed',
+            top: '80px',
+            right: '20px',
+            padding: '15px 20px',
+            borderRadius: '5px',
+            color: 'white',
+            zIndex: 9999,
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+            minWidth: '300px'
+        });
+    
+    $('body').append(notification);
+    notification.fadeIn(300);
+    
+    setTimeout(function() {
+        notification.fadeOut(300, function() {
+            $(this).remove();
+        });
+    }, 4000);
+}
+
+// Autocompletar direcciones chilenas comunes
+$('#test-destination').on('focus', function() {
+    if (!$(this).val()) {
+        $(this).attr('placeholder', 'Ej: Las Condes, Providencia, Ñuñoa, La Reina, Vitacura...');
+    }
+});
+
+// Sugerencias de direcciones para testing
+const chileanAddresses = [
+    'Las Condes, Santiago, Chile',
+    'Providencia, Santiago, Chile',
+    'Ñuñoa, Santiago, Chile',
+    'La Reina, Santiago, Chile',
+    'Vitacura, Santiago, Chile',
+    'San Miguel, Santiago, Chile',
+    'Maipú, Santiago, Chile',
+    'Puente Alto, Santiago, Chile',
+    'La Florida, Santiago, Chile',
+    'Peñalolén, Santiago, Chile'
+];
+
+$('#test-destination').on('input', function() {
+    const value = $(this).val().toLowerCase();
+    if (value.length >= 2) {
+        const suggestions = chileanAddresses.filter(addr => 
+            addr.toLowerCase().includes(value)
+        );
+        
+        // Aquí podrías implementar un dropdown de sugerencias
+        // Por simplicidad, solo cambiaremos el placeholder
+        if (suggestions.length > 0) {
+            $(this).attr('placeholder', suggestions[0]);
+        }
+    }
+});
+</script>
+{% endblock %}/api/methods',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                displayMethods(response.methods);
+                $('#available-methods').text(response.methods.filter(m => m.is_available_now).length);
+            }
+        },
+        error: function() {
+            $('#methods-list').html('<div class="alert alert-danger">Error al cargar métodos</div>');
+        }
+    });
+}
+
+function loadZones() {
+    $.ajax({
+        url: '/shipping/api/zones',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                displayZones(response.zones);
+                
+                // Actualizar precio mínimo
+                if (response.zones.length > 0) {
+                    const minPrice = Math.min(...response.zones.map(z => z.price_clp));
+                    $('#min-price').text(`$${minPrice.toLocaleString()}`);
+                }
+            }
+        },
+        error: function() {
+            $('#zones-table tbody').html('<tr><td colspan="3" class="text-center text-danger">Error al cargar zonas</td></tr>');
+        }
+    });
+}
+
+function loadStats() {
+    $.ajax({
+        url: '/shipping/admin/api/quotes/stats',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                $('#today-quotes').text(response.stats.today_quotes);
+            }
+        },
+        error: function() {
+            $('#today-quotes').text('Error');
+        }
+    });
+}
+
+function displayMethods(methods) {
+    let html = '';
+    
+    if (methods.length === 0) {
+        html = '<div class="alert alert-warning">No hay métodos de envío configurados</div>';
+    } else {
+        methods.forEach(function(method) {
+            const statusIndicator = method.is_available_now ? 'status-active' : 'status-inactive';
+            const statusText = method.is_available_now ? 'Disponible ahora' : 'No disponible';
+            const badgeClass = method.is_active ? 'bg-success' : 'bg-secondary';
+            
+            html += '<div class="border-bottom pb-3 mb-3">';
+            html += '<div class="d-flex justify-content-between align-items-start">';
+            html += '<div>';
+            html += `<h6 class="mb-1">${method.name}`;
+            html += `<span class="badge ${badgeClass} ms-2">${method.code}</span></h6>`;
+            html += `<p class="text-muted mb-1">${method.description || 'Sin descripción'}</p>`;
+            html += `<small class="text-muted">Horario: ${method.start_time} - ${method.end_time} | Máx: ${method.max_km} km</small>`;
+            html += '</div>';
+            html += '<div class="text-end">';
+            html += `<span class="status-indicator ${statusIndicator}"></span>`;
+            html += `<small class="text-muted">${statusText}</small>`;
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+        });
+    }
+    
+    $('#methods-list').html(html);
+}
+
+function displayZones(zones) {
+    let html = '';
+    
+    if (zones.length === 0) {
+        html = '<tr><td colspan="3" class="text-center">No hay zonas configuradas</td></tr>';
+    } else {
+        zones.forEach(function(zone) {
+            const badgeClass = zone.is_active ? 'bg-success' : 'bg-secondary';
+            const statusText = zone.is_active ? 'Activo' : 'Inactivo';
+            
+            html += '<tr>';
+            html += `<td>${zone.range_text}</td>`;
+            html += `<td><strong>${zone.price_formatted}</strong></td>`;
+            html += `<td><span class="badge ${badgeClass}">${statusText}</span></td>`;
+            html += '</tr>';
+        });
+    }
+    
+    $('#zones-table tbody').html(html);
+}
+
+function testShippingAPI() {
+    const origin = $('#test-origin').val();
+    const destination = $('#test-destination').val();
+    
+    if (!destination.trim()) {
+        showTestResult({
+            success: false,
+            error: 'Debes ingresar una dirección de destino'
+        }, false);
+        return;
+    }
+    
+    $('#test-result').html('<div class="text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Calculando ruta...</p></div>');
+    
+    $.ajax({
+        url: '/shipping/api/quote',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            origin: origin,
+            destination: destination,
+            session_id: 'test_' + Date.now()
+        }),
+        success: function(response) {
+            showTestResult(response, true);
+        },
+        error: function(xhr) {
+            let errorResponse = {
+                success: false,
+                error: 'Error en la petición'
+            };
+            
+            if (xhr.responseJSON) {
+                errorResponse = xhr.responseJSON;
+            }
+            
+            showTestResult(errorResponse, false);
+        }
+    });
+}
+
+function testGeocoding() {
+    const address = $('#test-destination').val();
+    
+    if (!address.trim()) {
+        showTestResult({
+            success: false,
+            error: 'Debes ingresar una dirección para geocodificar'
+        }, false);
+        return;
+    }
+    
+    $('#test-result').html('<div class="text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Geocodificando...</p></div>');
+    
+    $.ajax({
+        url: '/shipping
