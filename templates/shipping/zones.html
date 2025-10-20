@@ -1,0 +1,555 @@
+<!-- templates/shipping/zones.html -->
+{% extends "base.html" %}
+
+{% block title %}Zonas de Envío - Shipping Chile{% endblock %}
+
+{% block extra_css %}
+<style>
+    .zone-card {
+        border-radius: 10px;
+        border: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .zone-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    }
+    
+    .zone-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 15px;
+        margin: -15px -15px 15px -15px;
+    }
+    
+    .price-display {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #28a745;
+    }
+    
+    .distance-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 15px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .zone-inactive {
+        opacity: 0.6;
+    }
+    
+    .price-chart {
+        height: 300px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1>
+                    <i class="bi bi-calculator"></i> Zonas de Envío
+                </h1>
+                <p class="text-muted mb-0">Configura las tarifas por rango de distancia en kilómetros</p>
+            </div>
+            
+            <div>
+                <button class="btn btn-success" onclick="showCreateZoneModal()">
+                    <i class="bi bi-plus-circle"></i> Nueva Zona
+                </button>
+                <a href="{{ url_for('shipping.index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Volver
+                </a>
+            </div>
+        </div>
+        
+        <!-- Resumen de tarifas -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-bar-chart"></i> Estructura de Precios
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="price-chart" id="price-chart">
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando gráfico...</span>
+                                </div>
+                                <p class="mt-2">Cargando estructura de precios...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-body text-center">
+                        <h3 id="total-zones" class="text-primary">{{ zones|length }}</h3>
+                        <p class="mb-0">Total Zonas</p>
+                    </div>
+                </div>
+                <div class="card mb-3">
+                    <div class="card-body text-center">
+                        <h3 id="min-price" class="text-success">-</h3>
+                        <p class="mb-0">Precio Mínimo</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h3 id="max-price" class="text-warning">-</h3>
+                        <p class="mb-0">Precio Máximo</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Lista de zonas -->
+        <div class="row" id="zones-container">
+            {% if zones|length == 0 %}
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-calculator" style="font-size: 4rem; color: #ccc;"></i>
+                        <h4 class="mt-3">No hay zonas configuradas</h4>
+                        <p class="text-muted">Crea zonas de envío para definir las tarifas por distancia</p>
+                        <button class="btn btn-success" onclick="showCreateZoneModal()">
+                            <i class="bi bi-plus-circle"></i> Crear Primera Zona
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal para crear/editar zona -->
+<div class="modal fade" id="zoneModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="zoneModalTitle">Nueva Zona de Envío</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="zoneForm">
+                    <input type="hidden" id="zone-id">
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Importante:</strong> Las zonas no pueden solaparse. El sistema validará automáticamente que no haya conflictos de rangos.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Kilómetro Mínimo *</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="zone-min-km" 
+                                           step="0.1" min="0" max="50" required>
+                                    <span class="input-group-text">km</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Kilómetro Máximo *</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="zone-max-km" 
+                                           step="0.1" min="0.1" max="50" required>
+                                    <span class="input-group-text">km</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Precio (Pesos Chilenos) *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" id="zone-price" 
+                                   min="0" step="1" required>
+                            <span class="input-group-text">CLP</span>
+                        </div>
+                        <small class="text-muted">Precio en pesos chilenos (sin decimales)</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Vista Previa</label>
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <span class="distance-badge" id="preview-range">0 - 0 km</span>
+                                <div class="price-display mt-2" id="preview-price">$0</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="zone-active" checked>
+                            <label class="form-check-label" for="zone-active">
+                                Zona activa
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="saveZone()">
+                    <i class="bi bi-save"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let zones = [];
+
+$(document).ready(function() {
+    loadZones();
+});
+
+function loadZones() {
+    $.ajax({
+        url: '/shipping/admin/api/zones',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                zones = response.zones;
+                displayZones(zones);
+                updateStats(zones);
+                drawPriceChart(zones);
+            }
+        },
+        error: function() {
+            showNotification('error', 'Error al cargar zonas');
+        }
+    });
+}
+
+function displayZones(zones) {
+    let html = '';
+    
+    if (zones.length === 0) {
+        html = `<div class="col-12">
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <i class="bi bi-calculator" style="font-size: 4rem; color: #ccc;"></i>
+                            <h4 class="mt-3">No hay zonas configuradas</h4>
+                            <button class="btn btn-success" onclick="showCreateZoneModal()">
+                                <i class="bi bi-plus-circle"></i> Crear Primera Zona
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+    } else {
+        zones.forEach(function(zone, index) {
+            const cardClass = zone.is_active ? '' : 'zone-inactive';
+            const headerClass = zone.is_active ? 'zone-header' : 'zone-header bg-secondary';
+            
+            html += `<div class="col-md-4 mb-4">
+                        <div class="card zone-card ${cardClass}">
+                            <div class="card-body">
+                                <div class="${headerClass}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0">Zona ${index + 1}</h6>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown">
+                                                <i class="bi bi-three-dots"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="#" onclick="editZone(${zone.id})">
+                                                    <i class="bi bi-pencil"></i> Editar
+                                                </a></li>
+                                                <li><a class="dropdown-item" href="#" onclick="toggleZoneStatus(${zone.id})">
+                                                    <i class="bi bi-power"></i> ${zone.is_active ? 'Desactivar' : 'Activar'}
+                                                </a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item text-danger" href="#" onclick="deleteZone(${zone.id})">
+                                                    <i class="bi bi-trash"></i> Eliminar
+                                                </a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="text-center">
+                                    <span class="distance-badge">${zone.range_text}</span>
+                                    <div class="price-display mt-3 mb-3">${zone.price_formatted}</div>
+                                    
+                                    <div class="row text-center">
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Desde</small>
+                                            <strong>${zone.min_km} km</strong>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Hasta</small>
+                                            <strong>${zone.max_km} km</strong>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <span class="badge ${zone.is_active ? 'bg-success' : 'bg-secondary'}">
+                                            ${zone.is_active ? 'Activa' : 'Inactiva'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+        });
+    }
+    
+    $('#zones-container').html(html);
+}
+
+function updateStats(zones) {
+    const activeZones = zones.filter(z => z.is_active);
+    
+    $('#total-zones').text(zones.length);
+    
+    if (activeZones.length > 0) {
+        const prices = activeZones.map(z => z.price_clp);
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        
+        $('#min-price').text(`$${minPrice.toLocaleString()}`);
+        $('#max-price').text(`$${maxPrice.toLocaleString()}`);
+    } else {
+        $('#min-price').text('-');
+        $('#max-price').text('-');
+    }
+}
+
+function drawPriceChart(zones) {
+    if (zones.length === 0) {
+        $('#price-chart').html(`<div class="text-center">
+                                    <i class="bi bi-bar-chart" style="font-size: 3rem; color: #ccc;"></i>
+                                    <h5 class="mt-3">No hay datos para mostrar</h5>
+                                    <p class="text-muted">Crea zonas para ver el gráfico de precios</p>
+                                </div>`);
+        return;
+    }
+    
+    // Ordenar zonas por kilometraje
+    const sortedZones = zones.filter(z => z.is_active).sort((a, b) => a.min_km - b.min_km);
+    
+    let html = '<div class="d-flex justify-content-between align-items-end h-100">';
+    
+    sortedZones.forEach(function(zone, index) {
+        const maxPrice = Math.max(...sortedZones.map(z => z.price_clp));
+        const height = (zone.price_clp / maxPrice) * 200; // Altura máxima 200px
+        
+        html += `<div class="text-center" style="flex: 1;">
+                    <div class="bg-primary rounded-top mb-2" 
+                         style="height: ${height}px; margin: 0 5px;">
+                    </div>
+                    <small class="text-muted d-block">${zone.min_km}-${zone.max_km}km</small>
+                    <strong class="text-primary">$${zone.price_clp.toLocaleString()}</strong>
+                </div>`;
+    });
+    
+    html += '</div>';
+    $('#price-chart').html(html);
+}
+
+function showCreateZoneModal() {
+    $('#zoneModalTitle').text('Nueva Zona de Envío');
+    $('#zoneForm')[0].reset();
+    $('#zone-id').val('');
+    $('#zone-active').prop('checked', true);
+    updatePreview();
+    
+    const modal = new bootstrap.Modal(document.getElementById('zoneModal'));
+    modal.show();
+}
+
+function editZone(zoneId) {
+    const zone = zones.find(z => z.id === zoneId);
+    if (!zone) return;
+    
+    $('#zoneModalTitle').text('Editar Zona de Envío');
+    $('#zone-id').val(zone.id);
+    $('#zone-min-km').val(zone.min_km);
+    $('#zone-max-km').val(zone.max_km);
+    $('#zone-price').val(zone.price_clp);
+    $('#zone-active').prop('checked', zone.is_active);
+    updatePreview();
+    
+    const modal = new bootstrap.Modal(document.getElementById('zoneModal'));
+    modal.show();
+}
+
+function saveZone() {
+    const zoneId = $('#zone-id').val();
+    const isEdit = zoneId !== '';
+    
+    const data = {
+        min_km: parseFloat($('#zone-min-km').val()),
+        max_km: parseFloat($('#zone-max-km').val()),
+        price_clp: parseInt($('#zone-price').val()),
+        is_active: $('#zone-active').is(':checked')
+    };
+    
+    // Validaciones
+    if (isNaN(data.min_km) || isNaN(data.max_km) || isNaN(data.price_clp)) {
+        showNotification('error', 'Todos los campos numéricos son obligatorios');
+        return;
+    }
+    
+    if (data.min_km >= data.max_km) {
+        showNotification('error', 'El kilómetro mínimo debe ser menor que el máximo');
+        return;
+    }
+    
+    if (data.price_clp <= 0) {
+        showNotification('error', 'El precio debe ser mayor a 0');
+        return;
+    }
+    
+    const url = isEdit ? 
+        `/shipping/admin/api/zones/${zoneId}` : 
+        '/shipping/admin/api/zones';
+    
+    const method = isEdit ? 'PUT' : 'POST';
+    
+    $.ajax({
+        url: url,
+        method: method,
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(response) {
+            if (response.success) {
+                showNotification('success', response.message || 'Zona guardada correctamente');
+                bootstrap.Modal.getInstance(document.getElementById('zoneModal')).hide();
+                loadZones();
+            } else {
+                showNotification('error', response.error);
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Error al guardar zona';
+            showNotification('error', error);
+        }
+    });
+}
+
+function toggleZoneStatus(zoneId) {
+    const zone = zones.find(z => z.id === zoneId);
+    if (!zone) return;
+    
+    const newStatus = !zone.is_active;
+    const action = newStatus ? 'activar' : 'desactivar';
+    
+    if (!confirm(`¿Estás seguro de que quieres ${action} esta zona?`)) {
+        return;
+    }
+    
+    $.ajax({
+        url: `/shipping/admin/api/zones/${zoneId}`,
+        method: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({ is_active: newStatus }),
+        success: function(response) {
+            if (response.success) {
+                showNotification('success', `Zona ${action}da correctamente`);
+                loadZones();
+            } else {
+                showNotification('error', response.error);
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Error al cambiar estado';
+            showNotification('error', error);
+        }
+    });
+}
+
+function deleteZone(zoneId) {
+    const zone = zones.find(z => z.id === zoneId);
+    if (!zone) return;
+    
+    if (!confirm(`¿Estás seguro de que quieres eliminar la zona ${zone.range_text}?\n\nEsta acción no se puede deshacer.`)) {
+        return;
+    }
+    
+    $.ajax({
+        url: `/shipping/admin/api/zones/${zoneId}`,
+        method: 'DELETE',
+        success: function(response) {
+            if (response.success) {
+                showNotification('success', 'Zona eliminada correctamente');
+                loadZones();
+            } else {
+                showNotification('error', response.error);
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Error al eliminar zona';
+            showNotification('error', error);
+        }
+    });
+}
+
+function updatePreview() {
+    const minKm = parseFloat($('#zone-min-km').val()) || 0;
+    const maxKm = parseFloat($('#zone-max-km').val()) || 0;
+    const price = parseInt($('#zone-price').val()) || 0;
+    
+    $('#preview-range').text(`${minKm} - ${maxKm} km`);
+    $('#preview-price').text(`$${price.toLocaleString()}`);
+}
+
+// Actualizar preview en tiempo real
+$('#zone-min-km, #zone-max-km, #zone-price').on('input', updatePreview);
+
+function showNotification(type, message) {
+    const bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+    const icon = type === 'success' ? 'check-circle' : 'x-circle';
+    
+    const notification = $('<div class="toast-notification"></div>')
+        .addClass(bgClass)
+        .html('<i class="bi bi-' + icon + '"></i> ' + message)
+        .css({
+            position: 'fixed',
+            top: '80px',
+            right: '20px',
+            padding: '15px 20px',
+            borderRadius: '5px',
+            color: 'white',
+            zIndex: 9999,
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+            minWidth: '300px'
+        });
+    
+    $('body').append(notification);
+    notification.fadeIn(300);
+    
+    setTimeout(function() {
+        notification.fadeOut(300, function() {
+            $(this).remove();
+        });
+    }, 4000);
+}
+</script>
+{% endblock %}
