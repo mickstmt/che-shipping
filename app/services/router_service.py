@@ -1,3 +1,4 @@
+# app/services/router_service.py
 import requests
 import json
 import os
@@ -194,5 +195,6 @@ class RouterService:
                 'error': f'Error interno: {str(e)}',
                 'status': 'ERROR'
             }
-          # Instancia global del servicio
+
+# Instancia global del servicio
 router_service = RouterService()
