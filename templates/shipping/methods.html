@@ -373,12 +373,13 @@ function saveMethod() {
         return;
     }
     
-    const url = isEdit ? 
-        `/shipping/admin/api/methods/${methodId}` : 
+    const url = isEdit ?
+        `/shipping/admin/api/methods/${methodId}` :
         '/shipping/admin/api/methods';
-    
+
     const method = isEdit ? 'PUT' : 'POST';
-    
+    const action = isEdit ? 'actualiza' : 'crea';
+
     $.ajax({
         url: url,
         method: method,
@@ -387,6 +388,40 @@ function saveMethod() {
         success: function(response) {
             if (response.success) {
                 showNotification('success', `Método ${action}do correctamente`);
+
+                // Cerrar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('methodModal'));
+                modal.hide();
+
+                // Recargar lista
+                loadMethods();
+            } else {
+                showNotification('error', response.error);
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Error al guardar método';
+            showNotification('error', error);
+        }
+    });
+}
+
+function toggleMethodStatus(methodId) {
+    const method = methods.find(m => m.id === methodId);
+    if (!method) return;
+
+    const newStatus = method.is_active ? 'desactivar' : 'activar';
+
+    if (!confirm(`¿Estás seguro de que quieres ${newStatus} "${method.name}"?`)) {
+        return;
+    }
+
+    $.ajax({
+        url: `/shipping/admin/api/methods/${methodId}/toggle`,
+        method: 'POST',
+        success: function(response) {
+            if (response.success) {
+                showNotification('success', response.message);
                 loadMethods();
             } else {
                 showNotification('error', response.error);
@@ -402,11 +437,11 @@ function saveMethod() {
 function deleteMethod(methodId) {
     const method = methods.find(m => m.id === methodId);
     if (!method) return;
-    
+
     if (!confirm(`¿Estás seguro de que quieres eliminar "${method.name}"?\n\nEsta acción no se puede deshacer.`)) {
         return;
     }
-    
+
     $.ajax({
         url: `/shipping/admin/api/methods/${methodId}`,
         method: 'DELETE',

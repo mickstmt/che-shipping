@@ -8,11 +8,15 @@ db = SQLAlchemy()
 
 def create_app(config_name=None):
     """Factory para crear la aplicación Flask"""
-    
+
     if config_name is None:
         config_name = os.environ.get('ENVIRONMENT', 'development')
-    
-    app = Flask(__name__)
+
+    # Configurar template_folder para usar templates en la raíz del proyecto
+    import os as os_module
+    template_dir = os_module.path.abspath(os_module.path.join(os_module.path.dirname(__file__), '..', 'templates'))
+
+    app = Flask(__name__, template_folder=template_dir)
     
     # Configuración básica
     from config import config

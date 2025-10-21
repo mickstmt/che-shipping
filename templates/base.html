@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Shipping Chile{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <style>
+        .chile-flag {
+            background: linear-gradient(to right, #0033a0 0%, #ffffff 50%, #da020e 100%);
+            height: 4px;
+            width: 100%;
+            margin: 5px 0;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navegación -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-truck"></i> Shipping Chile
+            </a>
+            <div class="chile-flag"></div>
+            
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/shipping/">
+                    <i class="bi bi-truck"></i> Panel de Envíos
+                </a>
+                <a class="nav-link" href="/shipping/api/methods">
+                    <i class="bi bi-gear"></i> API
+                </a>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Contenido principal -->
+    <div class="container-fluid mt-4">
+        {% block content %}
+        <!-- Dashboard por defecto -->
+        <div class="row">
+            <div class="col-12 text-center">
+                <div class="card shadow p-5">
+                    <h1 class="display-4">
+                        <i class="bi bi-truck text-primary"></i>
+                        Bienvenido a Shipping Chile
+                    </h1>
+                    <div class="chile-flag mb-3"></div>
+                    <p class="lead">Sistema de envío integrado con RouterService para Chile</p>
+                    <hr>
+                    <p>Gestiona métodos de envío, tarifas por kilometraje y cotizaciones para Jumpseller</p>
+                    <a class="btn btn-primary btn-lg" href="/shipping/" role="button">
+                        <i class="bi bi-arrow-right-circle"></i> Ir al Panel de Envíos
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Características -->
+        <div class="row mt-5">
+            <div class="col-md-4">
+                <div class="card text-center p-4">
+                    <i class="bi bi-geo-alt text-primary" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">RouterService</h5>
+                    <p>Cálculo preciso de rutas en Chile</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center p-4">
+                    <i class="bi bi-clock text-success" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">Envío Hoy</h5>
+                    <p>Disponible de 00:01 a 18:00 hrs</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center p-4">
+                    <i class="bi bi-calendar-check text-info" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">Envío Programado</h5>
+                    <p>Disponible 24/7</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Información de API -->
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-link-45deg"></i> API para Jumpseller
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Endpoint Principal</h6>
+                                <code>POST http://localhost:5000/shipping/api/quote</code>
+                                
+                                <h6 class="mt-3">Ejemplo Request</h6>
+                                <pre class="bg-light p-3 small">{
+  "destination": "Providencia, Santiago, Chile",
+  "origin": "Santiago Centro, Chile"
+}</pre>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>URLs Disponibles</h6>
+                                <ul class="list-unstyled">
+                                    <li><a href="/shipping/api/methods" target="_blank">
+                                        <i class="bi bi-link"></i> /shipping/api/methods
+                                    </a></li>
+                                    <li><a href="/shipping/api/zones" target="_blank">
+                                        <i class="bi bi-link"></i> /shipping/api/zones
+                                    </a></li>
+                                    <li><a href="/shipping/" target="_blank">
+                                        <i class="bi bi-link"></i> /shipping/ (Panel Admin)
+                                    </a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endblock %}
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

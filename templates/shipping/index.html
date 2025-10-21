@@ -205,7 +205,6 @@
                             </div>
                         </div>
                         
-                        {% if current_user.is_admin() %}
                         <hr>
                         <div class="d-flex gap-2">
                             <a href="{{ url_for('shipping.manage_methods') }}" class="btn btn-outline-primary">
@@ -215,7 +214,6 @@
                                 <i class="bi bi-download"></i> Datos por Defecto
                             </button>
                         </div>
-                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -248,14 +246,12 @@
                             </table>
                         </div>
                         
-                        {% if current_user.is_admin() %}
                         <hr>
                         <div class="d-flex gap-2">
                             <a href="{{ url_for('shipping.manage_zones') }}" class="btn btn-outline-success">
                                 <i class="bi bi-tags"></i> Configurar Tarifas
                             </a>
                         </div>
-                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -275,8 +271,9 @@
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label class="form-label">Dirección de Origen</label>
-                                    <input type="text" class="form-control" id="test-origin" 
-                                           value="Santiago Centro, Chile" placeholder="Dirección de origen">
+                                    <input type="text" class="form-control" id="test-origin"
+                                           value="Amapolas 3959, Providencia, Ñuñoa, Región Metropolitana, Chile" placeholder="Dirección de origen">
+                                    <small class="text-muted">Dirección de tu tienda/almacén</small>
                                 </div>
                                 
                                 <div class="mb-3">
@@ -322,28 +319,106 @@ $(document).ready(function() {
 
 function loadMethods() {
     $.ajax({
-        url: '/shipping/api/test-address',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({
-            address: address
-        }),
+        url: '/shipping/api/methods',
+        method: 'GET',
         success: function(response) {
-            showTestResult(response, true);
-        },
-        error: function(xhr) {
-            let errorResponse = {
-                success: false,
-                error: 'Error en geocodificación'
-            };
-            
-            if (xhr.responseJSON) {
-                errorResponse = xhr.responseJSON;
+            if (response.success) {
+                displayMethods(response.methods);
+                $('#available-methods').text(response.methods.filter(m => m.is_available_now).length);
             }
-            
-            showTestResult(errorResponse, false);
+        },
+        error: function() {
+            $('#methods-list').html('<div class="alert alert-danger">Error al cargar métodos</div>');
         }
     });
+}
+
+function loadZones() {
+    $.ajax({
+        url: '/shipping/api/zones',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                displayZones(response.zones);
+
+                // Actualizar precio mínimo
+                if (response.zones.length > 0) {
+                    const minPrice = Math.min(...response.zones.map(z => z.price_clp));
+                    $('#min-price').text(`$${minPrice.toLocaleString()}`);
+                }
+            }
+        },
+        error: function() {
+            $('#zones-table tbody').html('<tr><td colspan="3" class="text-center text-danger">Error al cargar zonas</td></tr>');
+        }
+    });
+}
+
+function loadStats() {
+    $.ajax({
+        url: '/shipping/admin/api/quotes/stats',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                $('#today-quotes').text(response.stats.today_quotes);
+            }
+        },
+        error: function() {
+            $('#today-quotes').text('Error');
+        }
+    });
+}
+
+function displayMethods(methods) {
+    let html = '';
+
+    if (methods.length === 0) {
+        html = '<div class="alert alert-warning">No hay métodos de envío configurados. Haz clic en "Datos por Defecto" para inicializar.</div>';
+    } else {
+        methods.forEach(function(method) {
+            const statusIndicator = method.is_available_now ? 'status-active' : 'status-inactive';
+            const statusText = method.is_available_now ? 'Disponible ahora' : 'No disponible';
+            const badgeClass = method.is_active ? 'bg-success' : 'bg-secondary';
+
+            html += '<div class="border-bottom pb-3 mb-3">';
+            html += '<div class="d-flex justify-content-between align-items-start">';
+            html += '<div>';
+            html += `<h6 class="mb-1">${method.name}`;
+            html += `<span class="badge ${badgeClass} ms-2">${method.code}</span></h6>`;
+            html += `<p class="text-muted mb-1">${method.description || 'Sin descripción'}</p>`;
+            html += `<small class="text-muted">Horario: ${method.start_time} - ${method.end_time} | Máx: ${method.max_km} km</small>`;
+            html += '</div>';
+            html += '<div class="text-end">';
+            html += `<span class="status-indicator ${statusIndicator}"></span>`;
+            html += `<small class="text-muted">${statusText}</small>`;
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+        });
+    }
+
+    $('#methods-list').html(html);
+}
+
+function displayZones(zones) {
+    let html = '';
+
+    if (zones.length === 0) {
+        html = '<tr><td colspan="3" class="text-center">No hay zonas configuradas. Haz clic en "Datos por Defecto".</td></tr>';
+    } else {
+        zones.forEach(function(zone) {
+            const badgeClass = zone.is_active ? 'bg-success' : 'bg-secondary';
+            const statusText = zone.is_active ? 'Activo' : 'Inactivo';
+
+            html += '<tr>';
+            html += `<td>${zone.range_text}</td>`;
+            html += `<td><strong>${zone.price_formatted}</strong></td>`;
+            html += `<td><span class="badge ${badgeClass}">${statusText}</span></td>`;
+            html += '</tr>';
+        });
+    }
+
+    $('#zones-table tbody').html(html);
 }
 
 function showTestResult(result, isSuccess) {
@@ -465,6 +540,85 @@ function showNotification(type, message) {
     }, 4000);
 }
 
+function testShippingAPI() {
+    const origin = $('#test-origin').val();
+    const destination = $('#test-destination').val();
+
+    if (!destination.trim()) {
+        showTestResult({
+            success: false,
+            error: 'Debes ingresar una dirección de destino'
+        }, false);
+        return;
+    }
+
+    $('#test-result').html('<div class="text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Calculando ruta...</p></div>');
+
+    $.ajax({
+        url: '/shipping/api/quote',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            origin: origin,
+            destination: destination,
+            session_id: 'test_' + Date.now()
+        }),
+        success: function(response) {
+            showTestResult(response, true);
+        },
+        error: function(xhr) {
+            let errorResponse = {
+                success: false,
+                error: 'Error en la petición'
+            };
+
+            if (xhr.responseJSON) {
+                errorResponse = xhr.responseJSON;
+            }
+
+            showTestResult(errorResponse, false);
+        }
+    });
+}
+
+function testGeocoding() {
+    const address = $('#test-destination').val();
+
+    if (!address.trim()) {
+        showTestResult({
+            success: false,
+            error: 'Debes ingresar una dirección para geocodificar'
+        }, false);
+        return;
+    }
+
+    $('#test-result').html('<div class="text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Geocodificando...</p></div>');
+
+    $.ajax({
+        url: '/shipping/api/test-address',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            address: address
+        }),
+        success: function(response) {
+            showTestResult(response, true);
+        },
+        error: function(xhr) {
+            let errorResponse = {
+                success: false,
+                error: 'Error en geocodificación'
+            };
+
+            if (xhr.responseJSON) {
+                errorResponse = xhr.responseJSON;
+            }
+
+            showTestResult(errorResponse, false);
+        }
+    });
+}
+
 // Autocompletar direcciones chilenas comunes
 $('#test-destination').on('focus', function() {
     if (!$(this).val()) {
@@ -501,161 +655,4 @@ $('#test-destination').on('input', function() {
     }
 });
 </script>
-{% endblock %}/api/methods',
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                displayMethods(response.methods);
-                $('#available-methods').text(response.methods.filter(m => m.is_available_now).length);
-            }
-        },
-        error: function() {
-            $('#methods-list').html('<div class="alert alert-danger">Error al cargar métodos</div>');
-        }
-    });
-}
-
-function loadZones() {
-    $.ajax({
-        url: '/shipping/api/zones',
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                displayZones(response.zones);
-                
-                // Actualizar precio mínimo
-                if (response.zones.length > 0) {
-                    const minPrice = Math.min(...response.zones.map(z => z.price_clp));
-                    $('#min-price').text(`$${minPrice.toLocaleString()}`);
-                }
-            }
-        },
-        error: function() {
-            $('#zones-table tbody').html('<tr><td colspan="3" class="text-center text-danger">Error al cargar zonas</td></tr>');
-        }
-    });
-}
-
-function loadStats() {
-    $.ajax({
-        url: '/shipping/admin/api/quotes/stats',
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                $('#today-quotes').text(response.stats.today_quotes);
-            }
-        },
-        error: function() {
-            $('#today-quotes').text('Error');
-        }
-    });
-}
-
-function displayMethods(methods) {
-    let html = '';
-    
-    if (methods.length === 0) {
-        html = '<div class="alert alert-warning">No hay métodos de envío configurados</div>';
-    } else {
-        methods.forEach(function(method) {
-            const statusIndicator = method.is_available_now ? 'status-active' : 'status-inactive';
-            const statusText = method.is_available_now ? 'Disponible ahora' : 'No disponible';
-            const badgeClass = method.is_active ? 'bg-success' : 'bg-secondary';
-            
-            html += '<div class="border-bottom pb-3 mb-3">';
-            html += '<div class="d-flex justify-content-between align-items-start">';
-            html += '<div>';
-            html += `<h6 class="mb-1">${method.name}`;
-            html += `<span class="badge ${badgeClass} ms-2">${method.code}</span></h6>`;
-            html += `<p class="text-muted mb-1">${method.description || 'Sin descripción'}</p>`;
-            html += `<small class="text-muted">Horario: ${method.start_time} - ${method.end_time} | Máx: ${method.max_km} km</small>`;
-            html += '</div>';
-            html += '<div class="text-end">';
-            html += `<span class="status-indicator ${statusIndicator}"></span>`;
-            html += `<small class="text-muted">${statusText}</small>`;
-            html += '</div>';
-            html += '</div>';
-            html += '</div>';
-        });
-    }
-    
-    $('#methods-list').html(html);
-}
-
-function displayZones(zones) {
-    let html = '';
-    
-    if (zones.length === 0) {
-        html = '<tr><td colspan="3" class="text-center">No hay zonas configuradas</td></tr>';
-    } else {
-        zones.forEach(function(zone) {
-            const badgeClass = zone.is_active ? 'bg-success' : 'bg-secondary';
-            const statusText = zone.is_active ? 'Activo' : 'Inactivo';
-            
-            html += '<tr>';
-            html += `<td>${zone.range_text}</td>`;
-            html += `<td><strong>${zone.price_formatted}</strong></td>`;
-            html += `<td><span class="badge ${badgeClass}">${statusText}</span></td>`;
-            html += '</tr>';
-        });
-    }
-    
-    $('#zones-table tbody').html(html);
-}
-
-function testShippingAPI() {
-    const origin = $('#test-origin').val();
-    const destination = $('#test-destination').val();
-    
-    if (!destination.trim()) {
-        showTestResult({
-            success: false,
-            error: 'Debes ingresar una dirección de destino'
-        }, false);
-        return;
-    }
-    
-    $('#test-result').html('<div class="text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Calculando ruta...</p></div>');
-    
-    $.ajax({
-        url: '/shipping/api/quote',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({
-            origin: origin,
-            destination: destination,
-            session_id: 'test_' + Date.now()
-        }),
-        success: function(response) {
-            showTestResult(response, true);
-        },
-        error: function(xhr) {
-            let errorResponse = {
-                success: false,
-                error: 'Error en la petición'
-            };
-            
-            if (xhr.responseJSON) {
-                errorResponse = xhr.responseJSON;
-            }
-            
-            showTestResult(errorResponse, false);
-        }
-    });
-}
-
-function testGeocoding() {
-    const address = $('#test-destination').val();
-    
-    if (!address.trim()) {
-        showTestResult({
-            success: false,
-            error: 'Debes ingresar una dirección para geocodificar'
-        }, false);
-        return;
-    }
-    
-    $('#test-result').html('<div class="text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Geocodificando...</p></div>');
-    
-    $.ajax({
-        url: '/shipping
+{% endblock %}

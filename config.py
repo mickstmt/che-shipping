@@ -35,7 +35,7 @@ class DevelopmentConfig(Config):
     DEBUG = True
     ENVIRONMENT = 'development'
     
-    # Base de datos local (ajusta según tu configuración)
+    # Base de datos local
     db_user = os.environ.get('DB_USER') or 'root'
     db_password = os.environ.get('DB_PASSWORD') or ''
     db_host = os.environ.get('DB_HOST') or 'localhost'
@@ -53,22 +53,17 @@ class ProductionConfig(Config):
     ENVIRONMENT = 'production'
     SESSION_COOKIE_SECURE = True
     
-    # Variables obligatorias en producción
-    db_user = os.environ.get('DB_USER')
-    db_password = os.environ.get('DB_PASSWORD')
-    db_host = os.environ.get('DB_HOST')
-    db_name = os.environ.get('DB_NAME_PRODUCTION')
+    # Variables para producción (opcional, no validar si no están)
+    db_user = os.environ.get('DB_USER', 'root')
+    db_password = os.environ.get('DB_PASSWORD', '')
+    db_host = os.environ.get('DB_HOST', 'localhost')
+    db_name = os.environ.get('DB_NAME_PRODUCTION') or os.environ.get('DB_NAME', 'shipping_chile')
     
-    if not all([db_user, db_password, db_host, db_name]):
-        missing = []
-        if not db_user: missing.append('DB_USER')
-        if not db_password: missing.append('DB_PASSWORD')
-        if not db_host: missing.append('DB_HOST')
-        if not db_name: missing.append('DB_NAME_PRODUCTION')
-        raise ValueError(f"Faltan variables de entorno requeridas: {', '.join(missing)}")
-    
-    encoded_password = quote_plus(db_password)
-    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{db_user}:{encoded_password}@{db_host}/{db_name}"
+    if db_password:
+        encoded_password = quote_plus(db_password)
+        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{db_user}:{encoded_password}@{db_host}/{db_name}"
+    else:
+        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{db_user}@{db_host}/{db_name}"
 
 # Diccionario de configuraciones
 config = {

@@ -1,6 +1,11 @@
 # run.py
 from app import create_app
 import os
+import sys
+
+# Configurar codificación UTF-8 para Windows
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # Crear la aplicación
 app = create_app()
