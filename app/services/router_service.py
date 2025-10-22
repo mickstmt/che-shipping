@@ -11,17 +11,49 @@ class RouterService:
     """
 
     def __init__(self):
-        self.api_key = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjYwYTM2ZDg1MTA1YTRiM2U5MjFmZjdlM2RmZjlhMTkyIiwiaCI6Im11cm11cjY0In0="
+        self.api_key = os.environ.get('ROUTER_SERVICE_API_KEY') or "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjYwYTM2ZDg1MTA1YTRiM2U5MjFmZjdlM2RmZjlhMTkyIiwiaCI6Im11cm11cjY0In0="
         self.base_url = "https://api.openrouteservice.org"
         self.timeout = 30
 
-        # Amapolas 3959, Providencia como origen por defecto
-        # Coordenadas aproximadas (se pueden ajustar según geocodificación real)
-        self.default_origin = {
-            'lat': -33.4242,  # Coordenadas de Amapolas 3959, Providencia
-            'lng': -70.6068,
-            'address': 'Amapolas 3959, Providencia, Ñuñoa, Región Metropolitana, Chile'
-        }
+        # Leer origen desde .env
+        default_origin_address = os.environ.get('DEFAULT_ORIGIN_ADDRESS', 'Santiago Centro, Chile')
+        default_origin_name = os.environ.get('DEFAULT_ORIGIN_NAME', '')
+
+        # Intentar detectar si es una coordenada (formato: "lat,lng")
+        if ',' in default_origin_address and not any(c.isalpha() for c in default_origin_address):
+            try:
+                parts = default_origin_address.split(',')
+                if len(parts) == 2:
+                    lat, lng = float(parts[0].strip()), float(parts[1].strip())
+                    # Usar nombre personalizado si existe, sino usar coordenadas
+                    display_name = default_origin_name or f'Coordenadas: {lat}, {lng}'
+                    self.default_origin = {
+                        'lat': lat,
+                        'lng': lng,
+                        'address': display_name,
+                        'formatted_address': display_name,
+                        'is_coords': True
+                    }
+                    logging.info(f"Usando coordenadas directas como origen: {lat}, {lng} ({display_name})")
+                else:
+                    raise ValueError("Formato de coordenadas inválido")
+            except (ValueError, IndexError) as e:
+                logging.warning(f"No se pudieron parsear coordenadas: {default_origin_address}")
+                # Fallback a dirección de texto
+                self.default_origin = {
+                    'lat': -33.4372,  # Providencia centro aprox
+                    'lng': -70.6167,
+                    'address': default_origin_address,
+                    'is_coords': False
+                }
+        else:
+            # Es una dirección de texto
+            self.default_origin = {
+                'lat': None,
+                'lng': None,
+                'address': default_origin_address,
+                'is_coords': False
+            }
 
     def _geocode_default_origin(self):
         """Geocodificar la dirección de origen por defecto"""
@@ -177,11 +209,11 @@ class RouterService:
     def get_distance_and_time(self, origin_address: str, destination_address: str) -> Dict:
         """
         Método principal: obtener distancia y tiempo entre dos direcciones
-        
+
         Args:
             origin_address (str): Dirección de origen
             destination_address (str): Dirección de destino
-            
+
         Returns:
             Dict: Resultado completo con distancia, tiempo y coordenadas
         """
@@ -190,9 +222,33 @@ class RouterService:
             if origin_address and origin_address.lower() not in ['santiago', 'santiago centro']:
                 origin_geo = self.geocode_address(origin_address)
                 if not origin_geo:
-                    origin_geo = self.default_origin
+                    # Si falla geocodificación, usar default_origin
+                    if self.default_origin.get('lat') is None:
+                        # Default origin no tiene coordenadas, intentar geocodificarlo
+                        logging.info(f"Geocodificando origen por defecto: {self.default_origin['address']}")
+                        origin_geo = self.geocode_address(self.default_origin['address'])
+                        if not origin_geo:
+                            return {
+                                'success': False,
+                                'error': 'No se pudo geocodificar la dirección de origen',
+                                'status': 'ORIGIN_GEOCODING_FAILED'
+                            }
+                    else:
+                        origin_geo = self.default_origin
             else:
-                origin_geo = self.default_origin
+                # Usar default origin
+                if self.default_origin.get('lat') is None:
+                    # Default origin no tiene coordenadas, intentar geocodificarlo
+                    logging.info(f"Geocodificando origen por defecto: {self.default_origin['address']}")
+                    origin_geo = self.geocode_address(self.default_origin['address'])
+                    if not origin_geo:
+                        return {
+                            'success': False,
+                            'error': 'No se pudo geocodificar la dirección de origen por defecto',
+                            'status': 'ORIGIN_GEOCODING_FAILED'
+                        }
+                else:
+                    origin_geo = self.default_origin
             
             # 2. Geocodificar destino
             destination_geo = self.geocode_address(destination_address)

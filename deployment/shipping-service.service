@@ -1,0 +1,16 @@
+[Unit]
+Description=Che Shipping Service - Flask Application
+After=network.target mysql.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/che-shipping
+Environment="PATH=/var/www/che-shipping/venv/bin"
+ExecStart=/var/www/che-shipping/venv/bin/gunicorn --config gunicorn_config.py run:app
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -6,6 +6,7 @@ from app.services.router_service import router_service
 from datetime import datetime, time
 import json
 import logging
+import os
 from functools import wraps
 
 bp = Blueprint('shipping', __name__, url_prefix='/shipping')
@@ -33,6 +34,159 @@ def find_zone_for_distance(distance_km):
 # API ENDPOINTS PARA JUMPSELLER
 # ========================================
 
+@bp.route('/api/jumpseller/callback', methods=['POST'])
+def jumpseller_callback():
+    """
+    Endpoint callback para Jumpseller - Cotizar envíos
+
+    POST /shipping/api/jumpseller/callback
+    Recibe datos de Jumpseller y devuelve tarifas de envío disponibles
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'request' not in data:
+            return jsonify({
+                'reference_id': '',
+                'rates': []
+            }), 400
+
+        req_data = data['request']
+
+        # Extraer información de destino
+        to_address = req_data.get('to', {})
+        destination_parts = []
+
+        if to_address.get('address'):
+            destination_parts.append(to_address['address'])
+        if to_address.get('street_number'):
+            destination_parts.append(to_address['street_number'])
+        if to_address.get('city'):
+            destination_parts.append(to_address['city'])
+        if to_address.get('region_name'):
+            destination_parts.append(to_address['region_name'])
+
+        destination = ', '.join(filter(None, destination_parts))
+
+        if not destination:
+            destination = to_address.get('municipality_name', '') + ', Chile'
+
+        # Origen (desde .env)
+        origin = os.environ.get('DEFAULT_ORIGIN_ADDRESS', 'Santiago Centro, Chile')
+
+        # ID de referencia para tracking
+        cart_id = req_data.get('cart_id', '')
+        order_id = req_data.get('order_id', '')
+        reference_id = f"JS-{cart_id or order_id}"
+
+        # Calcular distancia usando RouterService
+        route_result = router_service.get_distance_and_time(origin, destination)
+
+        if not route_result['success']:
+            # Si falla, devolver array vacío de rates
+            return jsonify({
+                'reference_id': reference_id,
+                'rates': [],
+                'error': route_result.get('error', 'No se pudo calcular la ruta')
+            }), 200
+
+        distance_km = route_result['route']['distance_km']
+        duration_minutes = route_result['route']['duration_minutes']
+
+        # Obtener métodos de envío disponibles
+        available_methods = ShippingMethod.query.filter_by(is_active=True).all()
+        rates = []
+
+        for method in available_methods:
+            # Verificar si está dentro del horario
+            if not method.is_available_now():
+                continue
+
+            # Verificar si está dentro del rango de distancia
+            if distance_km > method.max_km:
+                continue
+
+            # Encontrar zona de precio
+            zone = find_zone_for_distance(distance_km)
+
+            if not zone:
+                continue
+
+            # Crear cotización en la base de datos
+            quote = ShippingQuote(
+                session_id=cart_id or order_id,
+                origin_address=route_result['origin']['formatted_address'],
+                destination_address=route_result['destination']['formatted_address'],
+                origin_lat=route_result['origin']['lat'],
+                origin_lng=route_result['origin']['lng'],
+                destination_lat=route_result['destination']['lat'],
+                destination_lng=route_result['destination']['lng'],
+                distance_km=distance_km,
+                duration_minutes=duration_minutes,
+                shipping_method_id=method.id,
+                zone_id=zone.id,
+                price_clp=zone.price_clp,
+                is_available=True,
+                router_response=json.dumps(route_result['router_response'])
+            )
+
+            db.session.add(quote)
+
+            # Formatear tarifa según especificación de Jumpseller
+            rate_description = f"{method.description} - {distance_km:.1f} km, aprox. {duration_minutes} min"
+
+            rates.append({
+                'rate_id': f"{method.code}_{zone.id}",
+                'rate_description': rate_description[:512],  # Max 512 chars
+                'service_name': method.name,
+                'service_code': method.code,
+                'total_price': str(zone.price_clp)  # Jumpseller espera string
+            })
+
+        db.session.commit()
+
+        return jsonify({
+            'reference_id': reference_id,
+            'rates': rates
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error en callback de Jumpseller: {str(e)}")
+        # Devolver respuesta vacía en caso de error (mejor que error 500)
+        return jsonify({
+            'reference_id': '',
+            'rates': []
+        }), 200
+
+@bp.route('/api/jumpseller/services', methods=['GET'])
+def jumpseller_services():
+    """
+    Endpoint para listar servicios disponibles para Jumpseller
+
+    GET /shipping/api/jumpseller/services
+    """
+    try:
+        methods = ShippingMethod.query.filter_by(is_active=True).all()
+
+        services = [
+            {
+                'service_name': method.name,
+                'service_code': method.code
+            }
+            for method in methods
+        ]
+
+        return jsonify({
+            'services': services
+        })
+
+    except Exception as e:
+        logging.error(f"Error al obtener servicios: {str(e)}")
+        return jsonify({
+            'services': []
+        }), 200
+
 @bp.route('/api/quote', methods=['POST'])
 def get_shipping_quote():
     """
@@ -55,7 +209,7 @@ def get_shipping_quote():
             }), 400
         
         destination = data.get('destination')
-        origin = data.get('origin', 'Santiago Centro, Chile')
+        origin = data.get('origin', '')  # Vacío usa las coordenadas del .env
         session_id = data.get('session_id')
         
         if not destination:
@@ -569,6 +723,213 @@ def toggle_method_status(method_id):
     except Exception as e:
         db.session.rollback()
         logging.error(f"Error al cambiar estado del método: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ========================================
+# CRUD COMPLETO PARA ZONAS DE ENVÍO
+# ========================================
+
+@bp.route('/admin/api/zones', methods=['POST'])
+@admin_required
+def create_zone():
+    """API: Crear nueva zona de envío"""
+    try:
+        data = request.get_json()
+
+        # Validar campos requeridos
+        required_fields = ['min_km', 'max_km', 'price_clp']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False,
+                    'error': f'Campo requerido: {field}'
+                }), 400
+
+        min_km = float(data['min_km'])
+        max_km = float(data['max_km'])
+        price_clp = int(data['price_clp'])
+
+        # Validar que min_km < max_km
+        if min_km >= max_km:
+            return jsonify({
+                'success': False,
+                'error': 'El kilómetro mínimo debe ser menor al kilómetro máximo'
+            }), 400
+
+        # Validar que no haya solapamiento con otras zonas activas
+        overlapping_zones = ShippingZone.query.filter(
+            ShippingZone.is_active == True,
+            db.or_(
+                db.and_(ShippingZone.min_km <= min_km, ShippingZone.max_km > min_km),
+                db.and_(ShippingZone.min_km < max_km, ShippingZone.max_km >= max_km),
+                db.and_(ShippingZone.min_km >= min_km, ShippingZone.max_km <= max_km)
+            )
+        ).all()
+
+        if overlapping_zones:
+            overlapping_ranges = ', '.join([f'{z.min_km}-{z.max_km}km' for z in overlapping_zones])
+            return jsonify({
+                'success': False,
+                'error': f'Esta zona se solapa con zonas existentes: {overlapping_ranges}'
+            }), 400
+
+        # Crear zona
+        zone = ShippingZone(
+            min_km=min_km,
+            max_km=max_km,
+            price_clp=price_clp,
+            is_active=data.get('is_active', True)
+        )
+
+        db.session.add(zone)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Zona creada correctamente',
+            'zone': zone.to_dict()
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error al crear zona: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/admin/api/zones/<int:zone_id>', methods=['PUT'])
+@admin_required
+def update_zone(zone_id):
+    """API: Actualizar zona de envío existente"""
+    try:
+        zone = ShippingZone.query.get(zone_id)
+        if not zone:
+            return jsonify({
+                'success': False,
+                'error': 'Zona no encontrada'
+            }), 404
+
+        data = request.get_json()
+
+        # Obtener valores actualizados o mantener los existentes
+        min_km = float(data.get('min_km', zone.min_km))
+        max_km = float(data.get('max_km', zone.max_km))
+        price_clp = int(data.get('price_clp', zone.price_clp))
+
+        # Validar que min_km < max_km
+        if min_km >= max_km:
+            return jsonify({
+                'success': False,
+                'error': 'El kilómetro mínimo debe ser menor al kilómetro máximo'
+            }), 400
+
+        # Validar que no haya solapamiento con otras zonas activas (excepto la misma)
+        overlapping_zones = ShippingZone.query.filter(
+            ShippingZone.id != zone_id,
+            ShippingZone.is_active == True,
+            db.or_(
+                db.and_(ShippingZone.min_km <= min_km, ShippingZone.max_km > min_km),
+                db.and_(ShippingZone.min_km < max_km, ShippingZone.max_km >= max_km),
+                db.and_(ShippingZone.min_km >= min_km, ShippingZone.max_km <= max_km)
+            )
+        ).all()
+
+        if overlapping_zones:
+            overlapping_ranges = ', '.join([f'{z.min_km}-{z.max_km}km' for z in overlapping_zones])
+            return jsonify({
+                'success': False,
+                'error': f'Esta zona se solapa con zonas existentes: {overlapping_ranges}'
+            }), 400
+
+        # Actualizar campos
+        zone.min_km = min_km
+        zone.max_km = max_km
+        zone.price_clp = price_clp
+
+        if 'is_active' in data:
+            zone.is_active = data['is_active']
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Zona actualizada correctamente',
+            'zone': zone.to_dict()
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error al actualizar zona: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/admin/api/zones/<int:zone_id>', methods=['DELETE'])
+@admin_required
+def delete_zone(zone_id):
+    """API: Eliminar zona de envío"""
+    try:
+        zone = ShippingZone.query.get(zone_id)
+        if not zone:
+            return jsonify({
+                'success': False,
+                'error': 'Zona no encontrada'
+            }), 404
+
+        # Verificar si tiene cotizaciones asociadas
+        quotes_count = ShippingQuote.query.filter_by(zone_id=zone_id).count()
+        if quotes_count > 0:
+            return jsonify({
+                'success': False,
+                'error': f'No se puede eliminar. Hay {quotes_count} cotizaciones asociadas a esta zona.'
+            }), 400
+
+        db.session.delete(zone)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Zona eliminada correctamente'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error al eliminar zona: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/admin/api/zones/<int:zone_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_zone_status(zone_id):
+    """API: Activar/desactivar zona de envío"""
+    try:
+        zone = ShippingZone.query.get(zone_id)
+        if not zone:
+            return jsonify({
+                'success': False,
+                'error': 'Zona no encontrada'
+            }), 404
+
+        zone.is_active = not zone.is_active
+        db.session.commit()
+
+        status = 'activada' if zone.is_active else 'desactivada'
+        return jsonify({
+            'success': True,
+            'message': f'Zona {status} correctamente',
+            'zone': zone.to_dict()
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error al cambiar estado de la zona: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)
