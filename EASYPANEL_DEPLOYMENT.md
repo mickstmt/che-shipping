@@ -109,8 +109,8 @@ DB_USER=shipping_user
 DB_PASSWORD=tu-password-mysql-segura
 DB_NAME=shipping_chile
 
-# RouterService API
-ROUTER_SERVICE_API_KEY=eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjYwYTM2ZDg1MTA1YTRiM2U5MjFmZjdlM2RmZjlhMTkyIiwiaCI6Im11cm11cjY0In0=
+# Google Maps API
+GOOGLE_MAPS_API_KEY=tu-google-maps-api-key-aqui
 
 # Configuración de origen (coordenadas exactas)
 DEFAULT_ORIGIN_ADDRESS=-33.43730244471958,-70.58568978400449

@@ -127,7 +127,7 @@ def jumpseller_callback():
                 zone_id=zone.id,
                 price_clp=zone.price_clp,
                 is_available=True,
-                router_response=json.dumps(route_result['router_response'])
+                router_response=json.dumps(route_result)  # Guardar toda la respuesta
             )
 
             db.session.add(quote)
@@ -265,7 +265,7 @@ def get_shipping_quote():
                 zone_id=zone.id,
                 price_clp=zone.price_clp,
                 is_available=True,
-                router_response=json.dumps(route_result['router_response'])
+                router_response=json.dumps(route_result)  # Guardar toda la respuesta
             )
             
             db.session.add(quote)

@@ -54,5 +54,6 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.bak
-diagnostico.py
-test_*.py
+
+# Backup files
+*_backup.py
