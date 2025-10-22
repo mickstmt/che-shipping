@@ -71,8 +71,8 @@ def jumpseller_callback():
         if not destination:
             destination = to_address.get('municipality_name', '') + ', Chile'
 
-        # Origen (desde .env)
-        origin = os.environ.get('DEFAULT_ORIGIN_ADDRESS', 'Santiago Centro, Chile')
+        # Origen: Usar string vacío para que RouterService use las coordenadas por defecto del .env
+        origin = ''  # RouterService usará DEFAULT_ORIGIN_ADDRESS automáticamente
 
         # ID de referencia para tracking
         cart_id = req_data.get('cart_id', '')
