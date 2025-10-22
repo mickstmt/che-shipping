@@ -12,14 +12,14 @@ def check_files():
     required_files = [
         'requirements.txt',
         '.gitignore',
+        '.dockerignore',
         '.env.example',
         'run.py',
         'config.py',
+        'Dockerfile',
         'gunicorn_config.py',
         'README.md',
-        'DEPLOYMENT.md',
-        'deployment/shipping-service.service',
-        'deployment/nginx-config',
+        'EASYPANEL_DEPLOYMENT.md',
         'database/init.sql'
     ]
 

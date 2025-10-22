@@ -44,7 +44,11 @@ python run.py
 
 ## 🌐 Despliegue en Producción
 
-Ver [DEPLOYMENT.md](DEPLOYMENT.md) para instrucciones detalladas.
+### Opción 1: Easypanel (Recomendado - Más Fácil)
+Ver [EASYPANEL_DEPLOYMENT.md](EASYPANEL_DEPLOYMENT.md) para despliegue con Docker en Easypanel.
+
+### Opción 2: VPS Manual
+Ver [DEPLOYMENT.md](DEPLOYMENT.md) para instalación manual con Nginx + Gunicorn.
 
 ## 📚 API Endpoints
 

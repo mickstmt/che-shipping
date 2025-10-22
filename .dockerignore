@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Database
+*.db
+*.sqlite
+
+# Test files
+test_*.py
+diagnostico.py
+check_deployment.py
+
+# Documentation (opcional, puedes incluirlo si quieres)
+# README.md
+# DEPLOYMENT.md
+
+# Deployment configs (no necesarios en Docker)
+deployment/
