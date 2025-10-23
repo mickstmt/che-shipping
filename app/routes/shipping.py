@@ -1,7 +1,8 @@
 # app/routes/shipping.py
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
+from flask_login import login_user, logout_user, login_required, current_user
 from app import db
-from app.models import ShippingZone, ShippingMethod, ShippingQuote
+from app.models import ShippingZone, ShippingMethod, ShippingQuote, AdminUser
 from app.services.router_service import router_service
 from datetime import datetime, time
 import json
@@ -11,12 +12,15 @@ from functools import wraps
 
 bp = Blueprint('shipping', __name__, url_prefix='/shipping')
 
-# Decorador simple para admin (sin autenticación por ahora)
+# Decorador para proteger rutas de administración
 def admin_required(f):
-    """Decorador simple - por ahora sin autenticación"""
+    """Decorador para requerir autenticación de administrador"""
     @wraps(f)
+    @login_required
     def decorated_function(*args, **kwargs):
-        # Por ahora permitir todo - puedes agregar autenticación después
+        if not current_user.is_authenticated or not current_user.is_active:
+            flash('Acceso denegado. No tienes permisos de administrador.', 'error')
+            return redirect(url_for('shipping.login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -27,8 +31,70 @@ def find_zone_for_distance(distance_km):
         ShippingZone.max_km >= distance_km,
         ShippingZone.is_active == True
     ).first()
-    
+
     return zone
+
+# ========================================
+# AUTENTICACIÓN - LOGIN/LOGOUT
+# ========================================
+
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    """Página de login para administradores"""
+
+    # Si ya está autenticado, redirigir al dashboard
+    if current_user.is_authenticated:
+        return redirect(url_for('shipping.index'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        if not username or not password:
+            flash('Por favor completa todos los campos.', 'error')
+            return render_template('login.html')
+
+        # Buscar usuario
+        admin = AdminUser.query.filter_by(username=username).first()
+
+        if not admin:
+            flash('Usuario o contraseña incorrectos.', 'error')
+            return render_template('login.html')
+
+        # Verificar que esté activo
+        if not admin.is_active:
+            flash('Tu cuenta está desactivada. Contacta al administrador.', 'error')
+            return render_template('login.html')
+
+        # Verificar password
+        if not admin.check_password(password):
+            flash('Usuario o contraseña incorrectos.', 'error')
+            return render_template('login.html')
+
+        # Login exitoso
+        login_user(admin)
+
+        # Actualizar último login
+        admin.last_login = datetime.utcnow()
+        db.session.commit()
+
+        flash(f'Bienvenido, {admin.username}!', 'success')
+
+        # Redirigir a la página que intentaba acceder o al dashboard
+        next_page = request.args.get('next')
+        if next_page:
+            return redirect(next_page)
+        return redirect(url_for('shipping.index'))
+
+    return render_template('login.html')
+
+@bp.route('/logout')
+@login_required
+def logout():
+    """Cerrar sesión"""
+    logout_user()
+    flash('Has cerrado sesión exitosamente.', 'success')
+    return redirect(url_for('shipping.login'))
 
 # ========================================
 # API ENDPOINTS PARA JUMPSELLER
@@ -394,6 +460,7 @@ def get_shipping_zones():
 # ========================================
 
 @bp.route('/')
+@admin_required
 def index():
     """Panel principal de gestión de envíos"""
     return render_template('shipping/index.html', title='Gestión de Envíos')

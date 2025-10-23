@@ -1,10 +1,12 @@
 # app/__init__.py
 from flask import Flask, redirect, url_for, request, render_template
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager
 import os
 
 # Inicializar extensiones
 db = SQLAlchemy()
+login_manager = LoginManager()
 
 def create_app(config_name=None):
     """Factory para crear la aplicación Flask"""
@@ -24,7 +26,18 @@ def create_app(config_name=None):
     
     # Inicializar extensiones
     db.init_app(app)
-    
+
+    # Configurar Flask-Login
+    login_manager.init_app(app)
+    login_manager.login_view = 'shipping.login'
+    login_manager.login_message = 'Por favor inicia sesión para acceder a esta página.'
+    login_manager.login_message_category = 'warning'
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models import AdminUser
+        return AdminUser.query.get(int(user_id))
+
     # ========================================
     # MANEJAR RECONEXIÓN DE BD
     # ========================================

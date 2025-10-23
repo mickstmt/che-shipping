@@ -123,3 +123,40 @@ class ShippingQuote(db.Model):
             'router_response': json.loads(self.router_response) if self.router_response else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+
+class AdminUser(db.Model):
+    """Modelo para usuarios administradores del sistema"""
+    __tablename__ = 'admin_users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return f'<AdminUser {self.username}>'
+
+    def set_password(self, password):
+        """Hashear y guardar password"""
+        from werkzeug.security import generate_password_hash
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        """Verificar password"""
+        from werkzeug.security import check_password_hash
+        return check_password_hash(self.password_hash, password)
+
+    # Flask-Login integration
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    def get_id(self):
+        return str(self.id)

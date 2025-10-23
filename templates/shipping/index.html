@@ -86,11 +86,25 @@
                 </p>
             </div>
             
-            <!-- Estado del servicio -->
-            <div id="service-status">
-                <span class="badge bg-success" id="status-badge">
-                    <i class="bi bi-check-circle"></i> Servicio Activo
-                </span>
+            <!-- Usuario y logout -->
+            <div class="d-flex align-items-center gap-3">
+                <div id="service-status">
+                    <span class="badge bg-success" id="status-badge">
+                        <i class="bi bi-check-circle"></i> Servicio Activo
+                    </span>
+                </div>
+                {% if current_user.is_authenticated %}
+                <div class="dropdown">
+                    <button class="btn btn-outline-primary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li><a class="dropdown-item" href="{{ url_for('shipping.logout') }}">
+                            <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+                        </a></li>
+                    </ul>
+                </div>
+                {% endif %}
             </div>
         </div>
         
