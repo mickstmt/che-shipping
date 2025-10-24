@@ -1,6 +1,27 @@
 from app import db
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import json
+
+try:
+    from zoneinfo import ZoneInfo
+    CHILE_TZ = ZoneInfo("America/Santiago")
+    USE_ZONEINFO = True
+except (ImportError, Exception):
+    # Fallback para Windows sin tzdata
+    USE_ZONEINFO = False
+    CHILE_UTC_OFFSET = -3  # UTC-3 (horario de verano Chile)
+
+def chile_now():
+    """Obtener fecha/hora actual en zona horaria de Chile"""
+    if USE_ZONEINFO:
+        return datetime.now(CHILE_TZ)
+    else:
+        # Fallback: UTC + offset de Chile
+        return datetime.utcnow() + timedelta(hours=CHILE_UTC_OFFSET)
+
+def chile_time_now():
+    """Obtener solo la hora actual en zona horaria de Chile"""
+    return chile_now().time()
 
 # AGREGAR ESTOS MODELOS AL FINAL DE app/models.py
 
@@ -51,11 +72,11 @@ class ShippingMethod(db.Model):
         return f'<ShippingMethod {self.name}>'
     
     def is_available_now(self):
-        """Verificar si el método está disponible en este momento"""
+        """Verificar si el método está disponible en este momento (hora de Chile)"""
         if not self.is_active:
             return False
-        
-        now = datetime.now().time()
+
+        now = chile_time_now()  # Usar hora de Chile
         
         # Si es el mismo día (start_time <= end_time)
         if self.start_time <= self.end_time:

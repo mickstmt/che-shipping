@@ -28,3 +28,6 @@ idna==3.6
 
 # Google Maps APIs
 googlemaps==4.10.0
+
+# Timezone data (requerido para zoneinfo en Windows y producción)
+tzdata==2024.1

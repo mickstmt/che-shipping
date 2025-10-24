@@ -74,8 +74,9 @@ def login():
         # Login exitoso
         login_user(admin)
 
-        # Actualizar último login
-        admin.last_login = datetime.utcnow()
+        # Actualizar último login (hora de Chile)
+        from app.models import chile_now
+        admin.last_login = chile_now().replace(tzinfo=None)  # Guardar sin timezone en BD
         db.session.commit()
 
         flash(f'Bienvenido, {admin.username}!', 'success')
