@@ -49,7 +49,7 @@ def create_app(config_name=None):
     # Registrar blueprints
     from app.routes import shipping
     app.register_blueprint(shipping.bp)
-    
+
     # Contexto global para templates
     @app.context_processor
     def inject_config():
@@ -57,11 +57,51 @@ def create_app(config_name=None):
             'environment': app.config.get('ENVIRONMENT', 'development'),
             'is_production': app.config.get('ENVIRONMENT') == 'production'
         }
-    
+
     # Ruta principal
     @app.route('/')
     def index():
         """Dashboard principal"""
         return render_template('base.html')
-    
+
+    # Auto-migración: Agregar columnas de días de la semana si no existen
+    with app.app_context():
+        try:
+            from sqlalchemy import text, inspect
+            inspector = inspect(db.engine)
+
+            # Verificar si existe la tabla shipping_methods
+            if 'shipping_methods' in inspector.get_table_names():
+                columns = [col['name'] for col in inspector.get_columns('shipping_methods')]
+
+                # Si no existe la columna available_monday, agregar todas las columnas de días
+                if 'available_monday' not in columns:
+                    print("⚙️  Agregando columnas de días de la semana...")
+                    db.session.execute(text("""
+                        ALTER TABLE shipping_methods
+                        ADD COLUMN available_monday BOOLEAN DEFAULT TRUE,
+                        ADD COLUMN available_tuesday BOOLEAN DEFAULT TRUE,
+                        ADD COLUMN available_wednesday BOOLEAN DEFAULT TRUE,
+                        ADD COLUMN available_thursday BOOLEAN DEFAULT TRUE,
+                        ADD COLUMN available_friday BOOLEAN DEFAULT TRUE,
+                        ADD COLUMN available_saturday BOOLEAN DEFAULT TRUE,
+                        ADD COLUMN available_sunday BOOLEAN DEFAULT TRUE
+                    """))
+                    db.session.commit()
+                    print("✓ Columnas de días agregadas")
+
+                    # Configurar "Envío Hoy" para lunes a viernes
+                    print("⚙️  Configurando 'Envío Hoy' para lunes a viernes...")
+                    db.session.execute(text("""
+                        UPDATE shipping_methods
+                        SET available_saturday = FALSE,
+                            available_sunday = FALSE
+                        WHERE code = 'envio_hoy'
+                    """))
+                    db.session.commit()
+                    print("✓ 'Envío Hoy' configurado para lunes a viernes")
+        except Exception as e:
+            print(f"⚠️  Error en auto-migración: {e}")
+            db.session.rollback()
+
     return app
