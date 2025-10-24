@@ -56,7 +56,7 @@ class ShippingZone(db.Model):
 class ShippingMethod(db.Model):
     """Modelo para métodos de envío"""
     __tablename__ = 'shipping_methods'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     code = db.Column(db.String(50), unique=True, nullable=False)
@@ -65,6 +65,16 @@ class ShippingMethod(db.Model):
     start_time = db.Column(db.Time, nullable=False)  # Hora de inicio
     end_time = db.Column(db.Time, nullable=False)    # Hora de fin
     max_km = db.Column(db.Float, default=7.0)        # Distancia máxima
+
+    # Días de la semana disponibles (0=Lunes, 6=Domingo)
+    available_monday = db.Column(db.Boolean, default=True)
+    available_tuesday = db.Column(db.Boolean, default=True)
+    available_wednesday = db.Column(db.Boolean, default=True)
+    available_thursday = db.Column(db.Boolean, default=True)
+    available_friday = db.Column(db.Boolean, default=True)
+    available_saturday = db.Column(db.Boolean, default=True)
+    available_sunday = db.Column(db.Boolean, default=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -76,8 +86,26 @@ class ShippingMethod(db.Model):
         if not self.is_active:
             return False
 
-        now = chile_time_now()  # Usar hora de Chile
-        
+        # Verificar día de la semana (0=Lunes, 6=Domingo)
+        current_datetime = chile_now()
+        weekday = current_datetime.weekday()
+
+        weekday_availability = [
+            self.available_monday,
+            self.available_tuesday,
+            self.available_wednesday,
+            self.available_thursday,
+            self.available_friday,
+            self.available_saturday,
+            self.available_sunday
+        ]
+
+        if not weekday_availability[weekday]:
+            return False
+
+        # Verificar horario
+        now = current_datetime.time()
+
         # Si es el mismo día (start_time <= end_time)
         if self.start_time <= self.end_time:
             return self.start_time <= now <= self.end_time
@@ -95,6 +123,15 @@ class ShippingMethod(db.Model):
             'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
             'end_time': self.end_time.strftime('%H:%M') if self.end_time else None,
             'max_km': self.max_km,
+            'available_days': {
+                'monday': self.available_monday,
+                'tuesday': self.available_tuesday,
+                'wednesday': self.available_wednesday,
+                'thursday': self.available_thursday,
+                'friday': self.available_friday,
+                'saturday': self.available_saturday,
+                'sunday': self.available_sunday
+            },
             'is_available_now': self.is_available_now(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None

@@ -29,9 +29,9 @@ Este documento explica cómo configurar dos métodos de envío externos en Jumps
 
 ### Características
 
-- **Disponibilidad:** Lunes a Domingo, de 00:01 a 18:00 hrs
+- **Disponibilidad:** Lunes a Viernes, de 00:01 a 18:00 hrs
 - **Cobertura:** Hasta 7 km desde Santiago Centro
-- **Descripción:** Entrega el mismo día para pedidos realizados antes de las 18:00 hrs
+- **Descripción:** Entrega el mismo día para pedidos realizados antes de las 18:00 hrs (solo días hábiles)
 
 ### JSON de Request que Jumpseller enviará:
 
@@ -304,8 +304,9 @@ Content-Type: application/json
 ### Diferencias entre los dos métodos:
 
 1. **Envío Hoy:**
-   - Solo disponible de 00:01 a 18:00 hrs
-   - Si un cliente hace un pedido después de las 18:00, NO aparecerá como opción
+   - Solo disponible de Lunes a Viernes, de 00:01 a 18:00 hrs
+   - NO disponible sábados y domingos
+   - Si un cliente hace un pedido después de las 18:00 o en fin de semana, NO aparecerá como opción
    - Entrega el mismo día
 
 2. **Envío Programado:**
@@ -324,8 +325,9 @@ Content-Type: application/json
 
 1. **Distancia:** Máximo 7 km desde Santiago Centro
 2. **Horario:** "Envío Hoy" solo hasta las 18:00
-3. **Geocodificación:** Debe poder encontrar la dirección en Chile
-4. **Zona:** Debe existir una tarifa para la distancia calculada
+3. **Días de la semana:** "Envío Hoy" solo de Lunes a Viernes
+4. **Geocodificación:** Debe poder encontrar la dirección en Chile
+5. **Zona:** Debe existir una tarifa para la distancia calculada
 
 ---
 
